@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Upload CSV - EDA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-file-upload me-2"></i>Upload Assessment Data</h4>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" method="POST" enctype="multipart/form-data" action="{{ url_for('eda.upload_eda') }}">
+                        <div class="mb-4">
+                            <div class="text-center mb-4">
+                                <i class="fas fa-file-csv fa-3x text-primary mb-3"></i>
+                                <h3>Start Your Analysis</h3>
+                                <p class="text-muted">Upload your assessment data to generate detailed insights</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="file" class="form-label fw-bold">Select Data File</label>
+                                <input class="form-control form-control-lg" type="file" id="file" name="file" accept=".csv,.xlsx,.xls" required>
+                                <div class="form-text">Supported formats: .csv, .xlsx, .xls. Maximum file size: 16MB</div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" id="submitBtn" class="btn btn-primary btn-lg">
+                                <span id="submitText">Upload and Analyze</span>
+                                <span id="spinner" class="spinner-border spinner-border-sm d-none" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Processing State Indicator -->
+                    <div id="processingMessage" class="text-center py-4 d-none">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Processing...</span>
+                        </div>
+                        <h5>Processing Your File</h5>
+                        <p class="text-muted">This may take a few moments. Please wait...</p>
+                        <div class="progress mt-3">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <button id="resetProcessingBtn" class="btn btn-outline-secondary btn-sm mt-3">
+                            <i class="fas fa-sync-alt me-1"></i> Reset Processing
+                        </button>
+                    </div>
+                    
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} mt-3">
+                                    {{ message }}
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    
+                    <div class="mt-4 pt-3 border-top">
+                        <h5 class="mb-3"><i class="fas fa-question-circle me-2"></i>How It Works</h5>
+                        <ol class="mb-0">
+                            <li class="mb-2">Upload your assessment data file (CSV or Excel format)</li>
+                            <li class="mb-2">Our system will automatically analyze the data</li>
+                            <li>View comprehensive reports and visualizations</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadForm = document.getElementById('uploadForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const spinner = document.getElementById('spinner');
+        const processingMessage = document.getElementById('processingMessage');
+        const progressBar = document.getElementById('progressBar');
+        const resetProcessingBtn = document.getElementById('resetProcessingBtn');
+        let progressInterval;
+
+        // Check for existing processing state on page load
+        checkProcessingState();
+
+        // Form submission handling
+        if (uploadForm) {
+            uploadForm.addEventListener('submit', function() {
+                submitBtn.disabled = true;
+                submitText.textContent = 'Processing...';
+                spinner.classList.remove('d-none');
+                
+                // Show processing message after a short delay
+                setTimeout(() => {
+                    uploadForm.classList.add('d-none');
+                    processingMessage.classList.remove('d-none');
+                    startProgressAnimation();
+                }, 1000);
+            });
+        }
+
+        // Reset processing button
+        if (resetProcessingBtn) {
+            resetProcessingBtn.addEventListener('click', function() {
+                fetch('{{ url_for("eda.reset_processing") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.reload();
+                    }
+                });
+            });
+        }
+
+        function checkProcessingState() {
+            fetch('{{ url_for("eda.check_processing") }}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.processing) {
+                        // Show processing state
+                        if (uploadForm) uploadForm.classList.add('d-none');
+                        processingMessage.classList.remove('d-none');
+                        startProgressAnimation();
+                        
+                        // Check periodically if processing is complete
+                        const checkInterval = setInterval(() => {
+                            fetch('{{ url_for("eda.check_processing") }}')
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (!data.processing && data.has_report) {
+                                        clearInterval(checkInterval);
+                                        window.location.reload();
+                                    } else if (!data.processing) {
+                                        clearInterval(checkInterval);
+                                        window.location.reload();
+                                    }
+                                });
+                        }, 2000);
+                    }
+                });
+        }
+
+        function startProgressAnimation() {
+            let progress = 0;
+            clearInterval(progressInterval);
+            
+            progressInterval = setInterval(() => {
+                progress += Math.random() * 5;
+                if (progress > 90) progress = 90; // Don't go to 100% until actually done
+                progressBar.style.width = progress + '%';
+            }, 500);
+        }
+    });
+</script>
+{% endblock %}

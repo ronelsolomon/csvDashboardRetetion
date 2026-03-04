@@ -1,0 +1,649 @@
+{% extends "base.html" %}
+
+{% block title %}EDA Report - CSV Dashboard{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .section-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 30px 0 20px 0;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+        transition: transform 0.2s;
+        height: 100%;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin: 10px 0;
+        color: var(--primary-color);
+    }
+    
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .data-table th {
+        background: #f3f4f6;
+        padding: 15px;
+        text-align: left;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .data-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .data-table tr:hover {
+        background: #f9fafb;
+    }
+    
+    .nav-tabs .nav-link {
+        color: #6b7280;
+        font-weight: 500;
+        border: none;
+        padding: 12px 20px;
+        margin-right: 5px;
+    }
+    
+    .nav-tabs .nav-link.active {
+        color: var(--primary-color);
+        background: white;
+        border-bottom: 3px solid var(--primary-color);
+    }
+    
+    .tab-content {
+        background: white;
+        border-radius: 0 0 10px 10px;
+        padding: 25px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .progress {
+        height: 10px;
+        border-radius: 5px;
+    }
+    
+    .chart-container {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">Exploratory Data Analysis</h1>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fas fa-download me-2"></i>Export
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="{{ url_for('eda.export_report', format='csv') }}">CSV</a></li>
+                <li><a class="dropdown-item" href="#" onclick="alert('PDF export coming soon!')">PDF</a></li>
+            </ul>
+            <a href="{{ url_for('eda.upload_eda') }}" class="btn btn-primary">
+                <i class="fas fa-upload me-2"></i>New Analysis
+            </a>
+        </div>
+    </div>
+    
+    <!-- Overview Section -->
+    <div class="section-header">
+        <h2 class="h4 mb-0"><i class="fas fa-chart-pie me-2"></i>Data Overview</h2>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ "{:,.0f}".format(report.overview.total_rows|default(0)|int) }}</div>
+                <div class="stat-label">Total Rows</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ report.overview.total_columns }}</div>
+                <div class="stat-label">Total Columns</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ report.overview.memory_usage }}</div>
+                <div class="stat-label">Memory Usage</div>
+            </div>
+        </div>
+        {% if report.overview.date_range %}
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ report.overview.date_range.days }}d</div>
+                <div class="stat-label">Date Range</div>
+                <div class="small text-muted">
+                    {{ report.overview.date_range.start }} - 
+                    {{ report.overview.date_range.end }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs mt-4" id="edaTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="data-quality-tab" data-bs-toggle="tab" data-bs-target="#data-quality" type="button" role="tab">
+                <i class="fas fa-clipboard-check me-2"></i>Data Quality
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" data-bs-target="#statistics" type="button" role="tab">
+                <i class="fas fa-chart-bar me-2"></i>Statistics
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="insights-tab" data-bs-toggle="tab" data-bs-target="#insights" type="button" role="tab">
+                <i class="fas fa-lightbulb me-2"></i>Insights
+            </button>
+        </li>
+    </ul>
+    
+    <!-- Tab Content -->
+    <div class="tab-content" id="edaTabsContent">
+        <!-- Data Quality Tab -->
+        <div class="tab-pane fade show active" id="data-quality" role="tabpanel">
+            <h3 class="h5 mb-4">Data Quality Assessment</h3>
+            
+            <div class="chart-container">
+                <h4>Missing Data</h4>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Column</th>
+                                <th>Data Type</th>
+                                <th>Missing Values</th>
+                                <th>Missing %</th>
+                                <th>Unique Values</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for col in report.missing_data %}
+                            <tr>
+                                <td><strong>{{ col.column }}</strong></td>
+                                <td>{{ col.data_type }}</td>
+                                <td>{{ col.total_missing }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2" style="height: 20px;">
+                                            <div class="progress-bar bg-{{ 'danger' if col.missing_pct > 20 else 'warning' if col.missing_pct > 5 else 'success' }}" 
+                                                 role="progressbar" 
+                                                 style="--width: {{ col.missing_pct }}%; width: var(--width);" 
+                                                 aria-valuenow="{{ col.missing_pct }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <span>{{ col.missing_pct }}%</span>
+                                    </div>
+                                </td>
+                                <td>{{ col.unique_values }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Statistics Tab -->
+        <div class="tab-pane fade" id="statistics" role="tabpanel">
+            <h3 class="h5 mb-4">Column Statistics</h3>
+            
+            {% for stat in report.column_stats %}
+            <div class="chart-container mb-4">
+                <h4>{{ stat.column }} <small class="text-muted">({{ stat.dtype }})</small></h4>
+                
+                {% if stat.dtype in ['int64', 'float64'] %}
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ stat.min|round(2) }}</div>
+                            <div class="stat-label">Min</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ stat.max|round(2) }}</div>
+                            <div class="stat-label">Max</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ stat.mean|round(2) }}</div>
+                            <div class="stat-label">Mean</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ stat.median|round(2) }}</div>
+                            <div class="stat-label">Median</div>
+                        </div>
+                    </div>
+                </div>
+                {% elif stat.top_values is defined and stat.top_values %}
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Value</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for value, count in stat.top_values.items() %}
+                            <tr>
+                                <td>{{ value }}</td>
+                                <td>{{ count }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress flex-grow-1 me-2">
+                                            <div class="progress-bar bg-info" 
+                                                 role="progressbar" 
+                                                 style="--width: {{ (count / report.overview.total_rows * 100)|round(1) }}%; width: var(--width);" 
+                                                 aria-valuenow="{{ (count / report.overview.total_rows * 100)|round(1) }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <span>{{ (count / report.overview.total_rows * 100)|round(1) }}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">No frequency data available for this column.</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Insights Tab -->
+        <div class="tab-pane fade" id="insights" role="tabpanel">
+            <h3 class="h5 mb-4">Key Insights</h3>
+            
+            <div class="row">
+                <div id="studentAnalysisLoading" class="text-center py-4" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Analyzing student responses. This may take a few minutes...</p>
+                </div>
+                
+                <div id="studentAnalysisContent">
+                {% if report.student_analysis %}
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <h4>Top Performing Students</h4>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Correct Answers</th>
+                                        <th>Accuracy</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if report.student_analysis is not none %}
+                                        {% set student_list = report.student_analysis|selectattr('accuracy', 'defined')|sort(attribute='accuracy', reverse=true) %}
+                                        {% for student in student_list|slice(5) %}
+                                            {% if student is mapping and 'student_id' in student and 'accuracy' in student %}
+                                            <tr>
+                                                <td>{{ student.student_id }}</td>
+                                                <td>{{ student.get('correct_answers', 0) }}/{{ student.get('total_questions', 0) }}</td>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="progress flex-grow-1 me-2">
+                                                            {% set accuracy = student.accuracy|default(0) %}
+                                                            {% set accuracy_class = accuracy|score_color(80, 50) %}
+                                                            <div class="progress-bar bg-{{ accuracy_class }}" 
+                                                                role="progressbar" 
+                                                                style="--width: {{ accuracy|round(1) }}%; width: var(--width);" 
+                                                                aria-valuenow="{{ accuracy|round(1) }}" 
+                                                                aria-valuemin="0" 
+                                                                aria-valuemax="100">
+                                                            </div>
+                                                        </div>
+                                                        <span class="text-{{ accuracy_class }}">{{ accuracy|percentage(1) }}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                        {% else %}
+                                            <tr>
+                                                <td colspan="3" class="text-center">No student data available</td>
+                                            </tr>
+                                        {% endfor %}
+                                    {% else %}
+                                        <tr>
+                                            <td colspan="3" class="text-center">Student analysis not available</td>
+                                        </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if report.topic_analysis %}
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <h4>Performance by Topic</h4>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Topic</th>
+                                        <th>Average Score</th>
+                                        <th>Questions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for topic in report.topic_analysis %}
+                                    <tr>
+                                        <td>{{ topic.topic }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress flex-grow-1 me-2">
+                                                    {% set accuracy = topic.accuracy|default(0)|float %}
+                                                    <div class="progress-bar bg-{{ 'success' if accuracy > 70 else 'warning' if accuracy > 50 else 'danger' }}" 
+                                                        role="progressbar" 
+                                                        style="--width: {{ accuracy|round(1) }}%; width: var(--width);"
+                                                        aria-valuenow="{{ accuracy|round(1) }}" 
+                                                        aria-valuemin="0" 
+                                                        aria-valuemax="100">
+                                                    </div>
+                                                </div>
+                                                <span>{{ "%.1f%%"|format(accuracy) }}</span>
+                                            </div>
+                                        </td>
+                                        <td>{{ topic.question_count }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                {% endif %}
+                </div> <!-- End studentAnalysisContent -->
+                
+                <!-- Detailed Response Analysis Section -->
+                {% if report.student_analysis and report.student_analysis.detailed_responses %}
+                <div class="col-12 mt-4">
+                    <div class="chart-container">
+                        <h4>Detailed Response Analysis</h4>
+                        <div class="accordion" id="detailedResponsesAccordion">
+                            {% for response in report.student_analysis.detailed_responses %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                            data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" 
+                                            aria-controls="collapse{{ loop.index }}">
+                                        {{ response.Student_ID }} - {{ response.Topic }} ({{ 'Correct' if response.Is_Correct else 'Incorrect' }})
+                                    </button>
+                                </h2>
+                                <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" 
+                                     aria-labelledby="heading{{ loop.index }}" data-bs-parent="#detailedResponsesAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <h5>Question</h5>
+                                                <p>{{ response.Question }}</p>
+                                                
+                                                <h5 class="mt-3">Student Answer</h5>
+                                                <div class="p-3 bg-light rounded">
+                                                    {{ response.Student_Answer }}
+                                                </div>
+                                                
+                                                <h5 class="mt-3">Correct Answer</h5>
+                                                <div class="p-3 bg-light rounded">
+                                                    {{ response.Answer_Key }}
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                {% if response.detailed_feedback %}
+                                                    {% set feedback = response.detailed_feedback %}
+                                                    <h5>Key Concepts</h5>
+                                                    <ul class="list-group mb-3">
+                                                        {% if feedback.facts and feedback.facts.key_concepts %}
+                                                            {% for concept in feedback.facts.key_concepts %}
+                                                            <li class="list-group-item">{{ concept }}</li>
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            <li class="list-group-item text-muted">No key concepts available</li>
+                                                        {% endif %}
+                                                    </ul>
+                                                    
+                                                    <h5 class="mt-3">Step-by-Step Solution</h5>
+                                                    {% if feedback.step_by_step %}
+                                                    <ol class="list-group list-group-numbered mb-3">
+                                                        {% for step in feedback.step_by_step %}
+                                                        <li class="list-group-item">{{ step }}</li>
+                                                        {% endfor %}
+                                                    </ol>
+                                                    {% else %}
+                                                    <div class="alert alert-info">No step-by-step solution available</div>
+                                                    {% endif %}
+                                                    
+                                                    <h5 class="mt-3">Strategy</h5>
+                                                    <div class="p-3 bg-light rounded mb-3">
+                                                        {{ feedback.strategy or 'No strategy available' }}
+                                                    </div>
+                                                    
+                                                    <h5 class="mt-3">Rationale</h5>
+                                                    <div class="p-3 bg-light rounded">
+                                                        {{ feedback.rationale or 'No rationale available' }}
+                                                    </div>
+                                                {% else %}
+                                                    <div class="alert alert-info">
+                                                        No detailed feedback available for this response.
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if report.recommendations %}
+            <div class="chart-container mt-4">
+                <h4>Recommendations</h4>
+                <div class="list-group">
+                    {% for rec in report.recommendations %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h5 class="mb-1">{{ rec.title }}</h5>
+                            <span class="badge bg-{{ rec.priority|lower }}">{{ rec.priority }}</span>
+                        </div>
+                        <p class="mb-1">{{ rec.description }}</p>
+                        {% if rec.suggested_actions %}
+                        <div class="mt-2">
+                            <small class="text-muted">Suggested actions:</small>
+                            <ul class="mb-0">
+                                {% for action in rec.suggested_actions %}
+                                <li>{{ action }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// Check if we need to show loading state for student analysis
+document.addEventListener('DOMContentLoaded', function() {
+    const analysisInProgress = getCookie('analysis_in_progress');
+    const studentAnalysisSection = document.getElementById('studentAnalysisContent');
+    const loadingSection = document.getElementById('studentAnalysisLoading');
+    
+    if (analysisInProgress === 'true' && studentAnalysisSection && loadingSection) {
+        // Show loading indicator and hide content
+        studentAnalysisSection.style.display = 'none';
+        loadingSection.style.display = 'block';
+        
+        // Check for analysis completion with proper cleanup
+        let checkInterval;
+        let isChecking = false;
+
+        async function checkAnalysisStatus() {
+            if (isChecking) return; // Prevent multiple simultaneous checks
+            
+            isChecking = true;
+            const loadingSection = document.getElementById('studentAnalysisLoading');
+            
+            try {
+                const response = await fetch('/eda/analysis_status');
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                const data = await response.text();
+                
+                if (data.trim() === 'complete') {
+                    // Clear the interval and reload the page
+                    clearInterval(checkInterval);
+                    document.cookie = 'analysis_in_progress=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                    window.location.reload();
+                } else if (data.trim() === 'not_found') {
+                    // Analysis not found or already completed
+                    clearInterval(checkInterval);
+                    if (loadingSection) {
+                        loadingSection.innerHTML = `
+                            <div class="alert alert-info">
+                                <p>Analysis not found or already completed.</p>
+                                <button class="btn btn-sm btn-outline-primary" onclick="window.location.reload()">
+                                    Refresh Page
+                                </button>
+                            </div>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking analysis status:', error);
+                if (loadingSection) {
+                    loadingSection.innerHTML = `
+                        <div class="alert alert-warning">
+                            <p>Error checking analysis status. Will retry in 5 seconds...</p>
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>`;
+                }
+            } finally {
+                isChecking = false;
+            }
+        }
+
+        // Start checking for analysis completion
+        checkInterval = setInterval(checkAnalysisStatus, 5000);
+
+        // Initial check
+        checkAnalysisStatus();
+    }
+    
+    // Helper function to get cookie value
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+});
+
+// Initialize tooltips
+var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+});
+
+// Tab persistence
+var triggerTabList = [].slice.call(document.querySelectorAll('#edaTabs button'))
+triggerTabList.forEach(function (triggerEl) {
+    var tabTrigger = new bootstrap.Tab(triggerEl)
+    triggerEl.addEventListener('click', function (event) {
+        event.preventDefault()
+        tabTrigger.show()
+    })
+});
+
+// Store the active tab in localStorage
+var tabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
+tabButtons.forEach(function(button) {
+    button.addEventListener('shown.bs.tab', function (e) {
+        localStorage.setItem('lastTab', e.target.getAttribute('data-bs-target'));
+    });
+});
+
+// On page load, switch to the last active tab
+var lastTab = localStorage.getItem('lastTab');
+if (lastTab) {
+    var lastTabButton = document.querySelector('button[data-bs-target="' + lastTab + '"]');
+    if (lastTabButton) {
+        var tab = new bootstrap.Tab(lastTabButton);
+        tab.show();
+    }
+}
+</script>
+{% endblock %}

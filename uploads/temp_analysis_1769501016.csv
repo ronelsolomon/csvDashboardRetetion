@@ -1,0 +1,6 @@
+Student_ID,Topic,Sub_Section,Learning_Objective,Sub_Topic,Question,Category,Answer_Key,Student_Answer,Is_Correct,Why_Wrong,Timestamp
+STU_001,Fractions,Basic,Add fractions,Unlike denominators,Q1,Procedure,A,A,True,,2024-10-01
+STU_001,Fractions,Basic,Add fractions,Unlike denominators,Q2,Fact,B,C,False,Forgot to find LCD,2024-10-02
+STU_001,Fractions,Basic,Add fractions,Unlike denominators,Q3,Strategy,C,C,True,,2024-10-03
+STU_001,Fractions,Basic,Add fractions,Unlike denominators,Q4,Rationale,D,B,False,Conceptual error,2024-10-04
+STU_001,Fractions,Basic,Add fractions,Unlike denominators,Q5,Procedure,A,B,False,Procedural mistake,2024-10-05
